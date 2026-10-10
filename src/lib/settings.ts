@@ -39,7 +39,10 @@ export const HAPTICS = {
 	invalid: [8, 50, 8],
 	win: [30, 60, 30, 60, 90],
 	gameOver: [60],
-	tap: 6
+	tap: 6,
+	serveGood: [20, 50, 40],
+	serveBad: [30, 60, 30],
+	regroup: [15, 30, 15]
 } as const satisfies Record<string, number | readonly number[] | boolean>;
 
 // ---------------------------------------------------------------------------
@@ -166,4 +169,38 @@ export const G2048 = {
 	/** Options d'aide par défaut. */
 	HELP_LONG_PRESS_DEFAULT: true,
 	HELP_COLOR_BY_VALUE_DEFAULT: false
+} as const;
+
+// ---------------------------------------------------------------------------
+// La Pizzeria
+// ---------------------------------------------------------------------------
+
+export const PIZZERIA = {
+	/** Découpes possibles d'une pizza. */
+	CUTS: [2, 3, 4, 6, 8, 12],
+	/** Boutons « Regrouper par k » proposés dans le monde 3. */
+	REGROUP_CHOICES: [2, 3, 4, 6],
+
+	/** Taille maximale de la pizza de travail, en px. */
+	PIZZA_MAX_PX: 280,
+
+	/** Arrivée d'un client, en ms. */
+	ARRIVE_MS: 450,
+	/** La pizza part vers le client, en ms. */
+	SERVE_MS: 450,
+	/** Temps de la réaction joyeuse avant que le client parte, en ms. */
+	HAPPY_MS: 1300,
+	/** Départ d'un client, en ms. */
+	LEAVE_MS: 400,
+	/** Fusion des parts (les traits de coupe s'effacent), en ms. */
+	REGROUP_MS: 650,
+	/** Affichage des groupes impossibles (« il en reste 2 »), en ms. */
+	REGROUP_FAIL_MS: 1800,
+
+	/** Étoiles selon le nombre de services ratés dans le niveau. */
+	STARS_3_MAX_ERRORS: 0,
+	STARS_2_MAX_ERRORS: 2,
+
+	/** Niveaux réussis dans un monde pour ouvrir le monde suivant. */
+	WORLD_UNLOCK_COUNT: 6
 } as const;
