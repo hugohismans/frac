@@ -118,6 +118,16 @@ describe('déblocages', () => {
 		expect(isWorldUnlocked(WORLDS[1], WORLDS, stars)).toBe(true);
 		expect(isLevelUnlocked(w2l1, WORLDS, stars)).toBe(true);
 	});
+	it('le mode enseignant ouvre tous les niveaux sans toucher aux étoiles', () => {
+		for (const world of WORLDS.filter((w) => !w.comingSoon)) {
+			expect(isWorldUnlocked(world, WORLDS, {}, true)).toBe(true);
+			for (const level of world.levels) expect(isLevelUnlocked(level, WORLDS, {}, true)).toBe(true);
+		}
+		expect(isLevelUnlocked(findLevel(3, 8)!, WORLDS, {}, false)).toBe(false);
+	});
+	it('même en mode enseignant, le monde 4 reste fermé', () => {
+		expect(isWorldUnlocked(WORLDS[3], WORLDS, {}, true)).toBe(false);
+	});
 	it('le monde 4 reste fermé', () => {
 		const all = Object.fromEntries(WORLDS.flatMap((w) => w.levels).map((l) => [l.id, 3]));
 		expect(isWorldUnlocked(WORLDS[3], WORLDS, all)).toBe(false);

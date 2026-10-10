@@ -90,18 +90,32 @@ export function starsFor(errors: number): 1 | 2 | 3 {
 
 export type StarsRecord = Record<string, number>;
 
-/** Un niveau est jouable si c'est le premier de son monde ouvert, ou si le précédent est réussi. */
-export function isLevelUnlocked(level: Level, worlds: World[], stars: StarsRecord): boolean {
+/**
+ * Un niveau est jouable si c'est le premier de son monde ouvert, ou si le précédent est réussi.
+ * unlockAll (mode enseignant) ouvre tous les niveaux des mondes disponibles.
+ */
+export function isLevelUnlocked(
+	level: Level,
+	worlds: World[],
+	stars: StarsRecord,
+	unlockAll = false
+): boolean {
 	const world = worlds.find((w) => w.id === level.world);
-	if (!world || !isWorldUnlocked(world, worlds, stars)) return false;
-	if (level.index === 1) return true;
+	if (!world || !isWorldUnlocked(world, worlds, stars, unlockAll)) return false;
+	if (level.index === 1 || unlockAll) return true;
 	const previous = world.levels.find((l) => l.index === level.index - 1);
 	return !!previous && (stars[previous.id] ?? 0) > 0;
 }
 
 /** Le monde 1 est ouvert ; les suivants s'ouvrent quand assez de niveaux du précédent sont réussis. */
-export function isWorldUnlocked(world: World, worlds: World[], stars: StarsRecord): boolean {
+export function isWorldUnlocked(
+	world: World,
+	worlds: World[],
+	stars: StarsRecord,
+	unlockAll = false
+): boolean {
 	if (world.comingSoon) return false;
+	if (unlockAll) return true;
 	const index = worlds.findIndex((w) => w.id === world.id);
 	if (index <= 0) return true;
 	const previous = worlds[index - 1];

@@ -18,6 +18,7 @@
 	import { WORLDS, findWorld } from './levels';
 	import PizzaBoard from './PizzaBoard.svelte';
 	import { progress } from './progress.svelte';
+	import { prefs } from '../prefs.svelte';
 	import type { Level } from './types';
 
 	interface Props {
@@ -32,7 +33,9 @@
 
 	const world = $derived(findWorld(level.world)!);
 	const next = $derived(nextLevel(level, WORLDS));
-	const nextOpen = $derived(!!next && isLevelUnlocked(next, WORLDS, progress.stars));
+	const nextOpen = $derived(
+		!!next && isLevelUnlocked(next, WORLDS, progress.stars, prefs.teacherMode)
+	);
 
 	let width = $state(360);
 	let viewportHeight = $state(700);

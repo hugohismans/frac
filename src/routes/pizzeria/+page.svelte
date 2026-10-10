@@ -6,6 +6,12 @@
 	import { WORLDS } from '#lib/pizzeria/levels.js';
 	import { progress } from '#lib/pizzeria/progress.svelte.js';
 	import { PIZZERIA } from '#lib/settings.js';
+	import { prefs, savePrefs } from '#lib/prefs.svelte.js';
+
+	function toggleTeacher() {
+		prefs.teacherMode = !prefs.teacherMode;
+		savePrefs();
+	}
 
 	const WORLD_COLORS = ['#ffe3a3', '#d4f0c4', '#d3e6ff', '#ffd6e8'];
 	const WORLD_PIZZAS: [number, number][] = [
@@ -37,8 +43,19 @@
 		</span>
 	</header>
 
+	{#if prefs.teacherMode}
+		<p class="teacher-banner" role="status">
+			<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+				><rect x="5" y="11" width="14" height="10" rx="2" /><path
+					d="M8 11V8a4 4 0 0 1 7.5-2"
+				/></svg
+			>
+			Mode enseignant : tous les niveaux sont ouverts.
+		</p>
+	{/if}
+
 	{#each WORLDS as world, w (world.id)}
-		{@const open = isWorldUnlocked(world, WORLDS, progress.stars)}
+		{@const open = isWorldUnlocked(world, WORLDS, progress.stars, prefs.teacherMode)}
 		<section class="world" class:locked={!open} style:--world={WORLD_COLORS[w]}>
 			<div class="world-head">
 				<Pizza parts={WORLD_PIZZAS[w][0]} filled={WORLD_PIZZAS[w][1]} size={56} />
@@ -61,7 +78,7 @@
 			{:else}
 				<ol class="levels">
 					{#each world.levels as level (level.id)}
-						{@const unlocked = isLevelUnlocked(level, WORLDS, progress.stars)}
+						{@const unlocked = isLevelUnlocked(level, WORLDS, progress.stars, prefs.teacherMode)}
 						{@const stars = progress.stars[level.id] ?? 0}
 						<li>
 							{#if unlocked}
@@ -92,6 +109,26 @@
 			{/if}
 		</section>
 	{/each}
+
+	<footer>
+		<button
+			type="button"
+			class="teacher-toggle"
+			role="switch"
+			aria-checked={prefs.teacherMode}
+			onclick={toggleTeacher}
+		>
+			<span class="track" aria-hidden="true"><span class="knob"></span></span>
+			<span class="label">
+				<strong>Mode enseignant</strong>
+				<span
+					>{prefs.teacherMode
+						? 'Activé : tout est ouvert'
+						: 'Ouvre tous les niveaux pour tester'}</span
+				>
+			</span>
+		</button>
+	</footer>
 </main>
 
 <style>
@@ -220,6 +257,93 @@
 		font-size: 1.35rem;
 		font-weight: 900;
 		line-height: 1;
+	}
+	.teacher-banner {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		margin: 0;
+		padding: 8px 12px;
+		border: 3px solid var(--ink);
+		border-radius: 14px;
+		background: var(--cheese);
+		font-weight: 800;
+		text-align: center;
+	}
+	.teacher-banner svg {
+		flex: none;
+		fill: none;
+		stroke: var(--ink);
+		stroke-width: 2.2;
+	}
+	footer {
+		display: flex;
+		justify-content: center;
+		margin-top: 8px;
+	}
+	.teacher-toggle {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		min-height: 56px;
+		padding: 6px 14px;
+		border: 2px dashed var(--ink-soft);
+		border-radius: 16px;
+		background: transparent;
+		color: var(--ink);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+	.teacher-toggle:focus-visible {
+		outline: 4px solid var(--focus);
+		outline-offset: 2px;
+	}
+	.track {
+		position: relative;
+		flex: none;
+		width: 52px;
+		height: 30px;
+		border: 3px solid var(--ink);
+		border-radius: 999px;
+		background: var(--card);
+		transition: background 150ms ease-out;
+	}
+	.knob {
+		position: absolute;
+		top: 3px;
+		left: 3px;
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		background: var(--ink);
+		transition: transform 150ms ease-out;
+	}
+	.teacher-toggle[aria-checked='true'] .track {
+		background: var(--basil);
+	}
+	.teacher-toggle[aria-checked='true'] .knob {
+		background: #fff;
+		transform: translateX(22px);
+	}
+	.label {
+		display: flex;
+		flex-direction: column;
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--ink-soft);
+	}
+	.label strong {
+		font-size: 1rem;
+		color: var(--ink);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.track,
+		.knob {
+			transition: none;
+		}
 	}
 	.closed {
 		background: transparent;
