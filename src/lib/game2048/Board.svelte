@@ -20,6 +20,13 @@
 	const cellPx = $derived((width - gap * (size + 1)) / size);
 	const fontPx = $derived(Math.max(13, Math.round(cellPx * 0.3)));
 
+	/**
+	 * Ordre d'affichage stable : les tuiles gardent leur identifiant en glissant, et les nouvelles
+	 * ont un identifiant plus grand. Trier par identifiant évite que Svelte déplace des éléments
+	 * dans le DOM, ce qui annulerait leur transition (la tuile se « téléporterait »).
+	 */
+	const ordered = $derived([...game.tiles].sort((a, b) => a.id - b.id));
+
 	function tileId(el: HTMLElement | null): number | null {
 		const raw = el?.dataset.tileId;
 		return raw ? Number(raw) : null;
@@ -56,7 +63,7 @@
 		></div>
 	{/each}
 
-	{#each game.tiles as tile (tile.id)}
+	{#each ordered as tile (tile.id)}
 		<Tile
 			{tile}
 			{fontPx}

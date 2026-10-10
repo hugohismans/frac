@@ -81,7 +81,7 @@ export const G2048 = {
 	START_TILES: 2,
 
 	/** Durée du glissement des tuiles, en ms. */
-	SLIDE_MS: 110,
+	SLIDE_MS: 140,
 	/** Durée du « pop » d'une tuile fusionnée ou nouvelle, en ms. */
 	POP_MS: 180,
 	/** Durée de l'animation de simplification (÷k), en ms. */
