@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import Pizza from '#lib/components/Pizza.svelte';
 	import FractionLabel from '#lib/components/FractionLabel.svelte';
+	import InstallCard from '#lib/components/InstallCard.svelte';
 </script>
 
 <svelte:head>
@@ -36,6 +37,8 @@
 			</span>
 		</a>
 	</nav>
+
+	<InstallCard />
 </main>
 
 <style>

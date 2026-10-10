@@ -17,6 +17,13 @@ npm run build    # site statique dans build/
 
 Toutes les constantes de gameplay et de ressenti sont dans `src/lib/settings.ts`.
 
+## Application installable (PWA)
+
+- `static/manifest.webmanifest` : nom, couleurs, icônes.
+- `src/service-worker.ts` : met tout le site en cache pour jouer hors ligne.
+- Icônes : modifier `static/icons/icon.svg`, puis `node scripts/icons.mjs`
+  (nécessite `playwright-core` et un Chromium ; `CHROMIUM_PATH` pour le chemin).
+
 ## Déploiement
 
 Chaque push sur `main` lance les tests puis publie le site sur GitHub Pages
