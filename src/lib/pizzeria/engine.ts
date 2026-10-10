@@ -3,9 +3,11 @@
  */
 
 import {
+	add,
 	canDivideBy,
 	compare,
 	divideBy,
+	expressOver,
 	frac,
 	isIrreducible,
 	simplify,
@@ -37,7 +39,9 @@ export function target(order: Order): Fraction {
 	switch (order.kind) {
 		case 'simplify':
 			return simplify(order.tray);
-		default:
+		case 'addition':
+		case 'parts':
+		case 'equivalence':
 			return order.order;
 	}
 }
@@ -69,6 +73,31 @@ export function regroup(value: Fraction, k: number): RegroupOutcome {
 	if (canDivideBy(value, k)) return { ok: true, value: divideBy(value, k) };
 	if (value.d % k !== 0) return { ok: false, reason: 'pizza', leftover: value.d % k, k };
 	return { ok: false, reason: 'tray', leftover: value.n % k, k };
+}
+
+/** Somme de plusieurs restes, sur le plus petit dénominateur commun, sans simplifier. */
+export function sumOf(pieces: readonly Fraction[]): Fraction {
+	if (pieces.length === 0) return frac(0, 1);
+	return pieces.slice(1).reduce((s, p) => add(s, p), pieces[0]);
+}
+
+/** Toutes les parts ont-elles la même taille ? */
+export function sameCut(pieces: readonly Fraction[]): boolean {
+	return pieces.every((p) => p.d === pieces[0]?.d);
+}
+
+export type RecutOutcome =
+	{ ok: true; pieces: Fraction[] } | { ok: false; failing: number[]; cut: number };
+
+/**
+ * Recoupe chaque reste en parts de 1/cut. Possible seulement si chaque reste
+ * tombe juste (1/2 en quarts : oui ; 1/3 en quarts : non).
+ */
+export function recutAll(pieces: readonly Fraction[], cut: number): RecutOutcome {
+	const result = pieces.map((p) => expressOver(p, cut));
+	const failing = result.flatMap((r, i) => (r ? [] : [i]));
+	if (failing.length > 0) return { ok: false, failing, cut };
+	return { ok: true, pieces: result as Fraction[] };
 }
 
 /** Nombre de parts sélectionnées. */

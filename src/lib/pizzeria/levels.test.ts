@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { isIrreducible, pgcd } from '../fraction';
+import { compare, isEquivalent, isIrreducible, pgcd, ppcm } from '../fraction';
 import { PIZZERIA } from '../settings';
-import { cutWorks } from './engine';
+import { cutWorks, sumOf } from './engine';
 import { WORLDS, allLevels, findLevel } from './levels';
 
 const CUTS = PIZZERIA.CUTS as readonly number[];
 
 describe('structure des mondes', () => {
-	it('les mondes 1 à 3 ont 8 niveaux numérotés de 1 à 8', () => {
-		for (const world of WORLDS.filter((w) => !w.comingSoon)) {
+	it('chaque monde a 8 niveaux numérotés de 1 à 8', () => {
+		for (const world of WORLDS) {
 			expect(world.levels.map((l) => l.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 			for (const l of world.levels) expect(l.world).toBe(world.id);
 		}
 	});
-	it('le monde 4 (addition) est annoncé mais pas encore jouable', () => {
-		const w4 = WORLDS.find((w) => w.id === 4)!;
-		expect(w4.comingSoon).toBe(true);
+	it('les quatre mondes sont jouables', () => {
+		expect(WORLDS.map((w) => w.id)).toEqual([1, 2, 3, 4]);
+		expect(WORLDS.every((w) => !w.comingSoon)).toBe(true);
 	});
 	it('les identifiants sont uniques', () => {
 		const ids = allLevels().map((l) => l.id);
@@ -28,9 +28,9 @@ describe('structure des mondes', () => {
 		}
 	});
 	it('chaque monde ne contient que son type de commande', () => {
-		const kinds = { 1: 'parts', 2: 'equivalence', 3: 'simplify' } as const;
+		const kinds = { 1: 'parts', 2: 'equivalence', 3: 'simplify', 4: 'addition' } as const;
 		for (const l of allLevels()) {
-			for (const c of l.customers) expect(c.kind, l.id).toBe(kinds[l.world as 1 | 2 | 3]);
+			for (const c of l.customers) expect(c.kind, l.id).toBe(kinds[l.world]);
 		}
 	});
 	it('findLevel retrouve un niveau', () => {
@@ -80,8 +80,30 @@ describe('chaque commande est réalisable', () => {
 						expect(pgcd(n, d)).toBe(1);
 						break;
 					}
-					case 'addition':
+					case 'addition': {
+						const all = c.leftovers;
+						expect(all.length).toBeGreaterThanOrEqual(2);
+						expect(all.length).toBeLessThanOrEqual(3);
+						for (const p of all) {
+							expect(CUTS).toContain(p.d);
+							expect(p.n).toBeGreaterThan(0);
+						}
+						// Tous les restes tiennent dans une pizza : le plateau ne déborde jamais.
+						expect(compare(sumOf(all), { n: 1, d: 1 })).toBeLessThanOrEqual(0);
+						// Une découpe commune existe pour tous les restes.
+						const common = all.reduce((m, p) => ppcm(m, p.d), 1);
+						expect(CUTS, `ppcm ${common}`).toContain(common);
+						// Au moins une combinaison d'au moins deux restes donne la commande,
+						// et aucun reste seul ne suffit.
+						const subsets = Array.from({ length: 2 ** all.length }, (_, mask) =>
+							all.filter((_, i) => mask & (1 << i))
+						);
+						expect(subsets.some((s) => s.length >= 2 && isEquivalent(sumOf(s), c.order))).toBe(
+							true
+						);
+						expect(all.some((p) => isEquivalent(p, c.order))).toBe(false);
 						break;
+					}
 				}
 			}
 		});

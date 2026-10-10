@@ -20,6 +20,10 @@ function tray(value: string, ask: 'fraction' | 'fewestParts' = 'fraction'): Orde
 	return { kind: 'simplify', tray: f(value), ask };
 }
 
+function rest(order: string, ...leftovers: string[]): Order {
+	return { kind: 'addition', order: f(order), leftovers: leftovers.map(f) };
+}
+
 function levels(world: WorldId, list: { customers: Order[]; tip?: string }[]): Level[] {
 	return list.map((l, i) => ({ id: `w${world}-l${i + 1}`, world, index: i + 1, ...l }));
 }
@@ -142,9 +146,73 @@ export const WORLDS: World[] = [
 		id: 4,
 		name: 'Les restes',
 		concept: 'Additionner des restes de pizzas.',
-		intro: 'Bientôt : combine des restes de pizzas coupées différemment.',
-		levels: [],
-		comingSoon: true
+		intro:
+			'Plus de pizza fraîche ! Combine les restes pour servir la commande. Recoupe le plateau pour que toutes les parts aient la même taille, et compte.',
+		levels: levels(4, [
+			{
+				customers: [
+					rest('3/4', '1/4', '2/4'),
+					rest('5/6', '2/6', '3/6'),
+					rest('7/8', '3/8', '4/8')
+				],
+				tip: 'Quand les parts ont la même taille, il suffit de les compter.'
+			},
+			{
+				customers: [
+					rest('3/4', '1/2', '1/4'),
+					rest('5/8', '1/2', '1/8'),
+					rest('3/8', '1/4', '1/8')
+				],
+				tip: 'Les parts n’ont pas la même taille ? Recoupe le plateau !'
+			},
+			{
+				customers: [
+					rest('3/4', '1/2', '1/4', '1/8'),
+					rest('5/8', '1/4', '1/2', '1/8'),
+					rest('5/6', '1/3', '1/6', '1/2')
+				],
+				tip: 'Il y a plus de restes que nécessaire : choisis les bons.'
+			},
+			{
+				customers: [
+					rest('1/2', '1/3', '1/6'),
+					rest('5/6', '2/3', '1/6'),
+					rest('1/2', '1/3', '1/3', '1/6')
+				]
+			},
+			{
+				customers: [
+					rest('5/6', '1/2', '1/3'),
+					rest('2/3', '1/2', '1/6'),
+					rest('5/6', '1/3', '1/2', '1/6')
+				]
+			},
+			{
+				customers: [
+					rest('7/12', '1/4', '1/3'),
+					rest('11/12', '1/4', '2/3'),
+					rest('1/2', '1/3', '1/4', '1/6'),
+					rest('3/4', '1/12', '1/4', '1/2')
+				]
+			},
+			{
+				customers: [
+					rest('1', '1/2', '1/4', '1/4'),
+					rest('1', '2/3', '1/3'),
+					rest('1', '1/2', '1/3', '1/6'),
+					rest('1', '3/4', '1/8', '1/8')
+				],
+				tip: 'Cette fois, il faut une pizza entière !'
+			},
+			{
+				customers: [
+					rest('11/12', '1/2', '1/3', '1/12'),
+					rest('2/3', '1/4', '1/6', '1/2'),
+					rest('5/8', '3/8', '1/4', '1/8'),
+					rest('2/3', '1/3', '5/12', '1/4')
+				]
+			}
+		])
 	}
 ];
 

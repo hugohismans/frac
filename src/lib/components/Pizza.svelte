@@ -1,4 +1,7 @@
 <script lang="ts" module>
+	/** Garniture : chaque reste du monde 4 a la sienne, pour qu'on voie d'où vient chaque part. */
+	export type Topping = 'pepperoni' | 'olive' | 'basil';
+
 	export interface SliceGeometry {
 		path: string;
 		innerPath: string;
@@ -26,20 +29,23 @@
 		return `M ${C} ${C} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z`;
 	}
 
+	/** Une part entre deux angles (en radians, 0 = à droite, sens horaire). */
+	export function sliceAt(a0: number, a1: number): SliceGeometry {
+		return {
+			path: sector(R, a0, a1),
+			innerPath: sector(R_SAUCE, a0, a1),
+			cheesePath: sector(R_CHEESE, a0, a1),
+			mid: (a0 + a1) / 2,
+			span: a1 - a0
+		};
+	}
+
 	/** Géométrie des parts : la première part commence en haut, puis on tourne dans le sens horaire. */
 	export function slices(count: number): SliceGeometry[] {
 		const span = (Math.PI * 2) / count;
-		return Array.from({ length: count }, (_, i) => {
-			const a0 = -Math.PI / 2 + i * span;
-			const a1 = a0 + span;
-			return {
-				path: sector(R, a0, a1),
-				innerPath: sector(R_SAUCE, a0, a1),
-				cheesePath: sector(R_CHEESE, a0, a1),
-				mid: a0 + span / 2,
-				span
-			};
-		});
+		return Array.from({ length: count }, (_, i) =>
+			sliceAt(-Math.PI / 2 + i * span, -Math.PI / 2 + (i + 1) * span)
+		);
 	}
 
 	/** Positions des rondelles de pepperoni dans une part. */
@@ -82,6 +88,8 @@
 </script>
 
 <script lang="ts">
+	import Toppings from './Toppings.svelte';
+
 	interface Props {
 		/** Nombre de parts. */
 		parts: number;
@@ -102,6 +110,8 @@
 		 * sont barrées (regroupement impossible).
 		 */
 		groups?: { k: number; count: number } | null;
+		/** Garniture des parts. */
+		topping?: Topping;
 	}
 
 	let {
@@ -112,7 +122,8 @@
 		highlighted,
 		selected,
 		fadingCuts = null,
-		groups = null
+		groups = null,
+		topping = 'pepperoni'
 	}: Props = $props();
 
 	const uid = $props.id();
@@ -171,10 +182,7 @@
 				<path d={slice.path} class="crust" />
 				<path d={slice.innerPath} class="sauce" />
 				<path d={slice.cheesePath} class="cheese" />
-				{#each pepperoni(slice) as p, j (j)}
-					<circle cx={p.x} cy={p.y} r={p.r} class="pep" />
-					<circle cx={p.x - p.r * 0.3} cy={p.y - p.r * 0.3} r={p.r * 0.25} class="pep-spot" />
-				{/each}
+				<Toppings {slice} kind={topping} />
 			{:else}
 				<path d={slice.path} class="empty" />
 			{/if}
@@ -233,12 +241,6 @@
 	}
 	.cheese {
 		fill: #ffcf4d;
-	}
-	.pep {
-		fill: #b8322a;
-	}
-	.pep-spot {
-		fill: #e06a55;
 	}
 	.cut {
 		stroke: #6b3a16;

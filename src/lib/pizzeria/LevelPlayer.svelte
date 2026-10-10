@@ -6,14 +6,16 @@
 	import FractionLabel from '../components/FractionLabel.svelte';
 	import Pizza from '../components/Pizza.svelte';
 	import Stars from '../components/Stars.svelte';
-	import { isSameForm } from '../fraction';
+	import { isSameForm, toString } from '../fraction';
 	import { fractionWords } from '../fractionWords';
 	import { motion } from '../motion.svelte';
 	import { PIZZERIA } from '../settings';
 	import CompareView from './CompareView.svelte';
 	import Customer, { type Mood } from './Customer.svelte';
 	import CutPicker from './CutPicker.svelte';
-	import { isLevelUnlocked, nextLevel } from './engine';
+	import { isLevelUnlocked, nextLevel, sameCut, sumOf } from './engine';
+	import LeftoverCounter, { LEFTOVER_TOPPINGS } from './LeftoverCounter.svelte';
+	import MixedPizza from '../components/MixedPizza.svelte';
 	import { LevelGame } from './level.svelte';
 	import { WORLDS, findWorld } from './levels';
 	import PizzaBoard from './PizzaBoard.svelte';
@@ -42,12 +44,13 @@
 	const pizzaSize = $derived(
 		Math.round(
 			Math.max(
-				170,
+				game.order.kind === 'addition' ? 140 : 170,
 				Math.min(
 					PIZZERIA.PIZZA_MAX_PX,
 					width - 48,
 					// Le monde 3 a une rangée de boutons « Regrouper » en plus.
-					viewportHeight - (game.order.kind === 'simplify' ? 470 : 400)
+					viewportHeight -
+						(game.order.kind === 'simplify' ? 470 : game.order.kind === 'addition' ? 560 : 400)
 				)
 			)
 		)
@@ -120,7 +123,20 @@
 				{#if game.phase === 'feedback' && game.result}
 					{#if game.result.verdict === 'exact'}
 						<p class="say">Miam, merci !</p>
-						{#if !isSameForm(game.result.served, game.result.order) && game.order.kind !== 'simplify'}
+						{#if game.order.kind === 'addition'}
+							<p class="equation">
+								{#each game.plateOriginals as piece, i (i)}
+									{#if i > 0}<span>+</span>{/if}
+									<FractionLabel value={piece} size={20} />
+								{/each}
+								<span>=</span>
+								<FractionLabel value={game.result.served} size={20} />
+								{#if !isSameForm(game.result.served, game.result.order)}
+									<span>=</span>
+									<FractionLabel value={game.result.order} size={20} />
+								{/if}
+							</p>
+						{:else if !isSameForm(game.result.served, game.result.order) && game.order.kind !== 'simplify'}
 							<p class="equation">
 								<FractionLabel value={game.result.served} size={22} />
 								<span>=</span>
@@ -142,9 +158,17 @@
 					<p class="say">Je voudrais</p>
 					<p class="order">
 						<FractionLabel value={game.wanted} size={30} />
-						<span>de pizza{game.order.kind === 'simplify' ? ', en grosses parts' : ''}</span>
+						<span
+							>{game.wanted.d === 1 ? 'pizza entière' : 'de pizza'}{game.order.kind === 'simplify'
+								? ', en grosses parts'
+								: game.order.kind === 'addition'
+									? ', avec les restes'
+									: ''}</span
+						>
 					</p>
-					<p class="words">({fractionWords(game.wanted)})</p>
+					{#if game.wanted.d !== 1}
+						<p class="words">({fractionWords(game.wanted)})</p>
+					{/if}
 				{/if}
 			</div>
 		{/if}
@@ -163,6 +187,14 @@
 				<CutPicker choices={game.order.cutChoices} onpick={(k) => game.chooseCut(k)} />
 			{/if}
 		{:else if game.phase === 'selecting' || game.phase === 'serving' || game.phase === 'arriving'}
+			{#if game.order.kind === 'addition'}
+				<LeftoverCounter
+					leftovers={game.leftovers}
+					onPlate={game.onPlate}
+					disabled={game.phase !== 'selecting'}
+					ontoggle={(i) => game.toggleLeftover(i)}
+				/>
+			{/if}
 			<div
 				class="pizza-slot"
 				class:serving={game.phase === 'serving'}
@@ -181,6 +213,22 @@
 								}
 							: null}
 						label="Plateau : {fractionWords(game.tray)} de pizza"
+					/>
+				{:else if game.order.kind === 'addition'}
+					<MixedPizza
+						size={pizzaSize}
+						pieces={game.leftovers.flatMap((value, i) =>
+							game.onPlate[i]
+								? [
+										{
+											value,
+											topping: LEFTOVER_TOPPINGS[i % LEFTOVER_TOPPINGS.length],
+											failing: !!game.recutFail?.indices.includes(i)
+										}
+									]
+								: []
+						)}
+						label="Plateau : {game.plate.length} reste{game.plate.length > 1 ? 's' : ''}"
 					/>
 				{:else if game.cut}
 					<PizzaBoard
@@ -209,6 +257,30 @@
 						<span>Sur le plateau :</span>
 						<FractionLabel value={game.tray} size={22} />
 					{/if}
+				{:else if game.order.kind === 'addition'}
+					{#if game.recutFail}
+						<Feedback
+							tone="oops"
+							text={`${game.recutFail.failing.map(toString).join(' et ')} ne ${game.recutFail.failing.length > 1 ? 'se coupent' : 'se coupe'} pas en ${game.recutFail.cut} parts égales.`}
+						/>
+					{:else if game.plate.length === 0}
+						<span>Touche les restes à poser sur le plateau.</span>
+					{:else if sameCut(game.plate)}
+						<span class="sum">
+							{#each game.plate as piece, i (i)}
+								{#if i > 0}<span>+</span>{/if}
+								<FractionLabel value={piece} size={20} />
+							{/each}
+							{#if game.plate.length > 1}
+								<span>=</span>
+								<FractionLabel value={sumOf(game.plate)} size={20} />
+							{/if}
+						</span>
+					{:else}
+						<span class="hint"
+							>Les parts n'ont pas la même taille : recoupe le plateau pour les compter.</span
+						>
+					{/if}
 				{:else if game.selectedCount === 0}
 					<span>Touche les parts à servir.</span>
 				{:else}
@@ -231,6 +303,23 @@
 								<strong>{k}</strong>
 							</button>
 						{/each}
+					</div>
+				{:else if game.order.kind === 'addition'}
+					<div class="recut" role="group" aria-label="Recouper le plateau">
+						<span class="small">Recouper le plateau en :</span>
+						<div class="recut-row">
+							{#each PIZZERIA.CUTS as k (k)}
+								<button
+									type="button"
+									class="chip small-chip"
+									aria-label="Recouper le plateau en {k} parts"
+									disabled={game.phase !== 'selecting' || game.plate.length === 0}
+									onclick={() => game.recutPlate(k)}
+								>
+									<strong>{k}</strong>
+								</button>
+							{/each}
+						</div>
 					</div>
 				{:else if game.order.kind === 'parts'}
 					<BigButton
@@ -526,6 +615,36 @@
 	.chip:focus-visible {
 		outline: 4px solid var(--focus);
 		outline-offset: 2px;
+	}
+	.recut {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		width: 100%;
+	}
+	.recut .small {
+		font-size: 0.85rem;
+		font-weight: 800;
+	}
+	.recut-row {
+		display: grid;
+		grid-template-columns: repeat(6, 1fr);
+		gap: 6px;
+		width: 100%;
+	}
+	.small-chip {
+		min-height: 48px;
+	}
+	.sum {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 1.3rem;
+	}
+	.hint {
+		font-size: 0.95rem;
+		line-height: 1.3;
 	}
 	.chip .small {
 		font-size: 0.7rem;

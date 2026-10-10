@@ -29,7 +29,11 @@ export interface SimplifyOrder {
 	ask: 'fraction' | 'fewestParts';
 }
 
-/** Monde 4 (plus tard) : combiner des restes de pizzas coupées différemment. */
+/**
+ * Monde 4 : combiner des restes de pizzas coupées différemment.
+ * Le joueur choisit les restes à mettre sur le plateau et peut les recouper
+ * pour que toutes les parts aient la même taille (dénominateur commun).
+ */
 export interface AdditionOrder {
 	kind: 'addition';
 	leftovers: Fraction[];

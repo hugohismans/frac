@@ -10,8 +10,11 @@ import {
 	judgeSimplify,
 	nextLevel,
 	partsNeeded,
+	recutAll,
 	regroup,
+	sameCut,
 	servedValue,
+	sumOf,
 	starsFor,
 	target
 } from './engine';
@@ -79,6 +82,30 @@ describe('regroup', () => {
 	});
 });
 
+describe('addition des restes', () => {
+	it('additionne sur le dénominateur commun', () => {
+		expect(sumOf([f(1, 2), f(1, 4)])).toEqual(f(3, 4));
+		expect(sumOf([f(1, 2), f(1, 3)])).toEqual(f(5, 6));
+		expect(sumOf([f(2, 4), f(1, 4)])).toEqual(f(3, 4));
+		expect(sumOf([f(1, 3)])).toEqual(f(1, 3));
+		expect(sumOf([])).toEqual(f(0, 1));
+	});
+	it('sait si toutes les parts ont la même taille', () => {
+		expect(sameCut([f(2, 4), f(1, 4)])).toBe(true);
+		expect(sameCut([f(1, 2), f(1, 4)])).toBe(false);
+		expect(sameCut([])).toBe(true);
+	});
+	it('recoupe tous les restes quand ça tombe juste', () => {
+		expect(recutAll([f(1, 2), f(1, 4)], 4)).toEqual({ ok: true, pieces: [f(2, 4), f(1, 4)] });
+		expect(recutAll([f(1, 2), f(1, 3)], 6)).toEqual({ ok: true, pieces: [f(3, 6), f(2, 6)] });
+		expect(recutAll([f(2, 4)], 2)).toEqual({ ok: true, pieces: [f(1, 2)] });
+	});
+	it('dit quels restes ne se recoupent pas', () => {
+		expect(recutAll([f(1, 2), f(1, 3)], 4)).toEqual({ ok: false, failing: [1], cut: 4 });
+		expect(recutAll([f(1, 3), f(1, 4)], 8)).toEqual({ ok: false, failing: [0], cut: 8 });
+	});
+});
+
 describe('sélection', () => {
 	it('compte et convertit en fraction', () => {
 		const sel = [true, false, true, true];
@@ -125,16 +152,21 @@ describe('déblocages', () => {
 		}
 		expect(isLevelUnlocked(findLevel(3, 8)!, WORLDS, {}, false)).toBe(false);
 	});
-	it('même en mode enseignant, le monde 4 reste fermé', () => {
-		expect(isWorldUnlocked(WORLDS[3], WORLDS, {}, true)).toBe(false);
+	it('un monde « bientôt » reste fermé, même en mode enseignant', () => {
+		const soon = { ...WORLDS[3], comingSoon: true };
+		expect(isWorldUnlocked(soon, [...WORLDS.slice(0, 3), soon], {}, true)).toBe(false);
 	});
-	it('le monde 4 reste fermé', () => {
-		const all = Object.fromEntries(WORLDS.flatMap((w) => w.levels).map((l) => [l.id, 3]));
-		expect(isWorldUnlocked(WORLDS[3], WORLDS, all)).toBe(false);
+	it('le monde 4 s’ouvre après assez de niveaux du monde 3', () => {
+		const stars: Record<string, number> = {};
+		for (const w of [1, 2]) for (let i = 1; i <= 8; i++) stars[`w${w}-l${i}`] = 1;
+		expect(isWorldUnlocked(WORLDS[3], WORLDS, stars)).toBe(false);
+		for (let i = 1; i <= PIZZERIA.WORLD_UNLOCK_COUNT; i++) stars[`w3-l${i}`] = 1;
+		expect(isWorldUnlocked(WORLDS[3], WORLDS, stars)).toBe(true);
 	});
 	it('enchaîne les niveaux puis les mondes', () => {
 		expect(nextLevel(w1l1, WORLDS)?.id).toBe('w1-l2');
 		expect(nextLevel(findLevel(1, 8)!, WORLDS)?.id).toBe('w2-l1');
-		expect(nextLevel(findLevel(3, 8)!, WORLDS)).toBeNull();
+		expect(nextLevel(findLevel(3, 8)!, WORLDS)?.id).toBe('w4-l1');
+		expect(nextLevel(findLevel(4, 8)!, WORLDS)).toBeNull();
 	});
 });

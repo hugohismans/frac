@@ -8,6 +8,7 @@
  *   selecting ─recut─▶ cutting (monde 1)
  *
  * Dans le monde 3, « selecting » est la phase où l'on regroupe les parts du plateau.
+ * Dans le monde 4, c'est la phase où l'on pose des restes sur le plateau et où on les recoupe.
  */
 
 import type { Fraction } from '../fraction';
@@ -18,6 +19,8 @@ import { customerFor, type CustomerInfo } from './customers';
 import {
 	countSelected,
 	judge,
+	recutAll,
+	sumOf,
 	judgeSimplify,
 	regroup,
 	servedValue,
@@ -51,6 +54,12 @@ export class LevelGame {
 	merging = $state<number | null>(null);
 	/** Monde 3 : regroupement impossible montré à l'enfant. */
 	regroupFail = $state<Extract<RegroupOutcome, { ok: false }> | null>(null);
+	/** Monde 4 : restes sur le comptoir (écriture actuelle, après recoupe éventuelle). */
+	leftovers = $state<Fraction[]>([]);
+	/** Monde 4 : restes posés sur le plateau. */
+	onPlate = $state<boolean[]>([]);
+	/** Monde 4 : découpe impossible montrée à l'enfant. */
+	recutFail = $state<{ cut: number; failing: Fraction[]; indices: number[] } | null>(null);
 	result = $state<ServeResult | null>(null);
 	stars = $state(0);
 	announce = $state('');
@@ -59,6 +68,11 @@ export class LevelGame {
 	customer: CustomerInfo = $derived.by(() => customerFor(this.level.id, this.index));
 	wanted: Fraction = $derived(target(this.order));
 	selectedCount = $derived(countSelected(this.selected));
+	plate: Fraction[] = $derived(this.leftovers.filter((_, i) => this.onPlate[i]));
+	/** Les restes du plateau tels qu'ils étaient au départ (pour écrire l'addition). */
+	plateOriginals: Fraction[] = $derived.by(() =>
+		this.order.kind === 'addition' ? this.order.leftovers.filter((_, i) => this.onPlate[i]) : []
+	);
 
 	private timers = new Set<ReturnType<typeof setTimeout>>();
 	private failToken = 0;
@@ -100,6 +114,9 @@ export class LevelGame {
 					? order.tray.d
 					: null;
 		this.selected = this.cut && order.kind !== 'simplify' ? Array(this.cut).fill(false) : [];
+		this.leftovers = order.kind === 'addition' ? order.leftovers.map((p) => ({ ...p })) : [];
+		this.onPlate = order.kind === 'addition' ? order.leftovers.map(() => false) : [];
+		this.recutFail = null;
 		this.announce = `${this.customer.name} arrive.`;
 		this.later(motion.ms(PIZZERIA.ARRIVE_MS), () => {
 			this.phase = order.kind === 'parts' ? 'cutting' : 'selecting';
@@ -159,20 +176,66 @@ export class LevelGame {
 		});
 	}
 
+	// --- Monde 4 : restes ---------------------------------------------------------
+
+	toggleLeftover(i: number): void {
+		if (this.phase !== 'selecting' || this.order.kind !== 'addition') return;
+		if (i < 0 || i >= this.onPlate.length) return;
+		this.onPlate[i] = !this.onPlate[i];
+		this.recutFail = null;
+		haptic('tap');
+		this.announce = this.onPlate[i] ? 'Reste posé sur le plateau.' : 'Reste remis sur le comptoir.';
+	}
+
+	/** Recoupe tous les restes du plateau en parts de 1/cut. */
+	recutPlate(cut: number): void {
+		if (this.phase !== 'selecting' || this.plate.length === 0) return;
+		const outcome = recutAll(this.plate, cut);
+		if (!outcome.ok) {
+			const token = ++this.failToken;
+			const plateIndices = this.onPlate.flatMap((on, i) => (on ? [i] : []));
+			this.recutFail = {
+				cut,
+				failing: outcome.failing.map((i) => this.plate[i]),
+				indices: outcome.failing.map((i) => plateIndices[i])
+			};
+			haptic('invalid');
+			this.later(PIZZERIA.REGROUP_FAIL_MS, () => {
+				if (this.failToken === token) this.recutFail = null;
+			});
+			return;
+		}
+		this.recutFail = null;
+		let j = 0;
+		this.leftovers = this.leftovers.map((p, i) => (this.onPlate[i] ? outcome.pieces[j++] : p));
+		haptic('regroup');
+		this.announce = `Plateau recoupé en parts de 1 sur ${cut}.`;
+	}
+
 	// --- Service ---------------------------------------------------------------
 
 	canServe = $derived(
 		this.phase === 'selecting' &&
 			!this.merging &&
-			(this.order.kind === 'simplify' ? !!this.tray : this.selectedCount > 0)
+			(this.order.kind === 'simplify'
+				? !!this.tray
+				: this.order.kind === 'addition'
+					? this.plate.length > 0
+					: this.selectedCount > 0)
 	);
 
 	serve(): void {
 		if (!this.canServe) return;
-		const served = this.order.kind === 'simplify' ? this.tray! : servedValue(this.selected);
+		const served =
+			this.order.kind === 'simplify'
+				? this.tray!
+				: this.order.kind === 'addition'
+					? sumOf(this.plate)
+					: servedValue(this.selected);
 		const verdict =
 			this.order.kind === 'simplify' ? judgeSimplify(served) : judge(served, this.wanted);
 		this.regroupFail = null;
+		this.recutFail = null;
 		this.result = { verdict, served, order: this.wanted };
 		this.phase = 'serving';
 		this.later(motion.ms(PIZZERIA.SERVE_MS), () => {
