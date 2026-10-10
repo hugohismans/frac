@@ -2,7 +2,6 @@
 	import FractionLabel from '../components/FractionLabel.svelte';
 	import Pizza from '../components/Pizza.svelte';
 	import { fractionWords } from '../fractionWords';
-	import { tileColor } from './colors';
 	import type { TileView } from './game.svelte';
 
 	interface Props {
@@ -10,11 +9,13 @@
 		fontPx: number;
 		selected: boolean;
 		shaking: boolean;
-		colorByValue: boolean;
+		color: string;
+		/** Nombre de tuiles égales à réunir pour fusionner (affiché s'il vaut 3 ou plus). */
+		need: number;
 		onkeyboardtap: (id: number) => void;
 	}
 
-	let { tile, fontPx, selected, shaking, colorByValue, onkeyboardtap }: Props = $props();
+	let { tile, fontPx, selected, shaking, color, need, onkeyboardtap }: Props = $props();
 
 	const isWholeOne = $derived(tile.value.d === 1);
 </script>
@@ -22,9 +23,10 @@
 <div
 	class="tile {tile.state}"
 	class:selected
+	style:--cell-font="{fontPx}px"
 	style:--row={tile.row}
 	style:--col={tile.col}
-	style:--bg={tileColor(tile.value, colorByValue)}
+	style:--bg={color}
 >
 	{#if tile.state === 'ghost'}
 		<div class="face" aria-hidden="true">
@@ -37,7 +39,8 @@
 			type="button"
 			data-gesture-target
 			data-tile-id={tile.id}
-			aria-label={fractionWords(tile.value)}
+			aria-label={fractionWords(tile.value) +
+				(need > 2 ? `, il en faut ${need} pour fusionner` : '')}
 			aria-pressed={selected}
 			onclick={(e) => {
 				// Les taps tactiles et souris passent par les gestes du plateau ; ici, seulement le clavier.
@@ -47,7 +50,16 @@
 			{#if isWholeOne}
 				<span class="whole-icon" aria-hidden="true"><Pizza parts={1} size={fontPx * 1.1} /></span>
 			{/if}
-			<FractionLabel value={tile.value} size={isWholeOne ? fontPx * 0.9 : fontPx} decorative />
+			<FractionLabel
+				value={tile.value}
+				size={(isWholeOne ? fontPx * 0.9 : fontPx) * (need > 2 ? 0.86 : 1)}
+				decorative
+			/>
+			{#if need > 2}
+				<span class="need" aria-hidden="true">
+					{#each Array(need) as _, i (i)}<span class="dot"></span>{/each}
+				</span>
+			{/if}
 			{#if tile.state === 'simplified' && tile.divisor}
 				<span class="div-badge top" aria-hidden="true">÷{tile.divisor}</span>
 				<span class="div-badge bottom" aria-hidden="true">÷{tile.divisor}</span>
@@ -87,7 +99,7 @@
 		height: 100%;
 		padding: 0;
 		border: 3px solid var(--ink);
-		border-radius: 16px;
+		border-radius: var(--radius);
 		background: var(--bg);
 		color: var(--ink);
 		font: inherit;
@@ -121,6 +133,16 @@
 	}
 	.shake {
 		animation: shake 360ms ease-in-out;
+	}
+	.need {
+		display: flex;
+		gap: max(2px, calc(var(--cell-font) * 0.12));
+	}
+	.dot {
+		width: max(4px, calc(var(--cell-font) * 0.26));
+		height: max(4px, calc(var(--cell-font) * 0.26));
+		border-radius: 50%;
+		background: var(--ink);
 	}
 	.whole-icon {
 		display: block;

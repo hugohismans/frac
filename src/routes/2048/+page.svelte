@@ -8,14 +8,15 @@
 	import Board from '#lib/game2048/Board.svelte';
 	import DivisorPicker from '#lib/game2048/DivisorPicker.svelte';
 	import { Game2048 } from '#lib/game2048/game.svelte.js';
-	import type { Direction } from '#lib/game2048/engine.js';
+	import { findVariant, type Direction } from '#lib/game2048/engine.js';
+	import NewGameSheet from '#lib/game2048/NewGameSheet.svelte';
 	import { prefs, savePrefs } from '#lib/prefs.svelte.js';
 
 	const game = new Game2048();
 	onDestroy(() => game.destroy());
 
 	let optionsOpen = $state(false);
-	let confirmRestart = $state(false);
+	let setupOpen = $state(false);
 
 	const KEYS: Record<string, Direction> = {
 		ArrowUp: 'up',
@@ -29,7 +30,7 @@
 	};
 
 	function onkeydown(e: KeyboardEvent) {
-		if (optionsOpen || confirmRestart || e.altKey || e.ctrlKey || e.metaKey) return;
+		if (optionsOpen || setupOpen || e.altKey || e.ctrlKey || e.metaKey) return;
 		const dir = KEYS[e.key];
 		if (dir) {
 			e.preventDefault();
@@ -46,14 +47,13 @@
 		}
 	}
 
-	function restart() {
-		if (game.phase !== 'over' && game.score > 0 && !confirmRestart) {
-			confirmRestart = true;
-			return;
-		}
-		confirmRestart = false;
-		game.newGame();
+	function startGame(variantId: string, size: number) {
+		setupOpen = false;
+		game.newGame(variantId, size);
 	}
+
+	const variant = $derived(findVariant(game.rules.variantId));
+	const usesTriples = $derived(game.rules.ladder.some((k) => k > 2));
 
 	function toggle(key: 'haptics' | 'helpLongPress' | 'helpColorByValue') {
 		prefs[key] = !prefs[key];
@@ -74,8 +74,17 @@
 				><path d="M15 5l-7 7 7 7" /></svg
 			>
 		</a>
-		<h1>Fraction 2048</h1>
-		<button class="round" type="button" aria-label="Nouvelle partie" onclick={restart}>
+		<div class="title">
+			<h1>Fraction 2048</h1>
+			<span class="mode">{variant.name} · {game.rules.size} × {game.rules.size}</span>
+		</div>
+		<button
+			class="round"
+			type="button"
+			aria-label="Nouvelle partie"
+			aria-haspopup="dialog"
+			onclick={() => (setupOpen = true)}
+		>
 			<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
 				<path d="M19 12a7 7 0 1 1-2.1-5M19 4.5v4h-4" />
 			</svg>
@@ -137,10 +146,9 @@
 			/>
 		{:else}
 			<p class="hint">
-				Glisse pour faire bouger les tuiles. Deux fractions <strong>égales</strong> fusionnent.
-				Touche une tuile pour la simplifier{prefs.helpLongPress
-					? ', garde le doigt dessus pour voir sa pizza'
-					: ''}.
+				Glisse pour faire bouger les tuiles. Les fractions <strong>égales</strong>
+				fusionnent{usesTriples ? ' (●●● : il en faut trois alignées)' : ''}. Touche une tuile pour
+				la simplifier{prefs.helpLongPress ? ', garde le doigt dessus pour voir sa pizza' : ''}.
 			</p>
 		{/if}
 	</div>
@@ -175,17 +183,14 @@
 		</div>
 	{/if}
 
-	{#if confirmRestart}
-		<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="restart-title">
-			<div class="dialog">
-				<h2 id="restart-title">Nouvelle partie ?</h2>
-				<p>La partie en cours sera perdue.</p>
-				<BigButton variant="primary" wide onclick={restart}>Oui, on recommence</BigButton>
-				<BigButton variant="ghost" wide onclick={() => (confirmRestart = false)}
-					>Non, je continue</BigButton
-				>
-			</div>
-		</div>
+	{#if setupOpen}
+		<NewGameSheet
+			variantId={game.rules.variantId}
+			size={game.rules.size}
+			inProgress={game.phase !== 'over' && game.score > 0}
+			onstart={startGame}
+			onclose={() => (setupOpen = false)}
+		/>
 	{:else if game.phase === 'won'}
 		<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="won-title">
 			<div class="dialog">
@@ -197,7 +202,10 @@
 						size={20}
 					/>.
 				</p>
-				<p>Tu peux continuer pour en faire 2, puis 4...</p>
+				<p>
+					Tu peux continuer pour en faire {game.rules.afterOne}, puis {game.rules.afterOne *
+						game.rules.afterOne}...
+				</p>
 				<BigButton variant="primary" wide onclick={() => game.continueAfterWin()}
 					>Continuer</BigButton
 				>
@@ -214,7 +222,9 @@
 					<p class="record">Nouveau record !</p>
 				{/if}
 				<BigButton variant="primary" wide onclick={() => game.newGame()}>Rejouer</BigButton>
-				<BigButton variant="ghost" wide href={resolve('/')}>Accueil</BigButton>
+				<BigButton variant="ghost" wide onclick={() => (setupOpen = true)}
+					>Changer de brique ou de grille</BigButton
+				>
 			</div>
 		</div>
 	{/if}
@@ -241,12 +251,22 @@
 		align-items: center;
 		gap: 8px;
 	}
-	h1 {
+	.title {
 		flex: 1;
-		font-size: 1.3rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		min-width: 0;
+	}
+	h1 {
+		font-size: 1.25rem;
 		font-weight: 900;
-		text-align: center;
 		white-space: nowrap;
+	}
+	.mode {
+		font-size: 0.85rem;
+		font-weight: 800;
+		color: var(--ink-soft);
 	}
 	.round {
 		display: grid;
@@ -370,6 +390,8 @@
 		flex: none;
 	}
 	.overlay {
+		user-select: none;
+		-webkit-user-select: none;
 		display: grid;
 		place-items: center;
 		padding: 16px;

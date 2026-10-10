@@ -4,6 +4,7 @@
 	import { prefs } from '../prefs.svelte';
 	import { G2048 } from '../settings';
 	import type { Game2048 } from './game.svelte';
+	import { tileColor } from './colors';
 	import HelpPopover from './HelpPopover.svelte';
 	import Tile from './Tile.svelte';
 
@@ -14,9 +15,10 @@
 	let { game }: Props = $props();
 
 	let width = $state(320);
-	const gap = G2048.TILE_GAP_PX;
-	const cellPx = $derived((width - gap * (G2048.SIZE + 1)) / G2048.SIZE);
-	const fontPx = $derived(Math.max(16, Math.round(cellPx * 0.3)));
+	const size = $derived(game.rules.size);
+	const gap = $derived(Math.max(4, G2048.TILE_GAP_PX - Math.max(0, size - 4) * 2));
+	const cellPx = $derived((width - gap * (size + 1)) / size);
+	const fontPx = $derived(Math.max(13, Math.round(cellPx * 0.3)));
 
 	function tileId(el: HTMLElement | null): number | null {
 		const raw = el?.dataset.tileId;
@@ -28,7 +30,8 @@
 	class="board"
 	bind:clientWidth={width}
 	style:--gap="{gap}px"
-	style:--cell="calc((100% - {gap * (G2048.SIZE + 1)}px) / {G2048.SIZE})"
+	style:--cell="calc((100% - {gap * (size + 1)}px) / {size})"
+	style:--radius="{Math.round(cellPx * 0.2)}px"
 	style:--slide-ms="{motion.ms(G2048.SLIDE_MS)}ms"
 	style:--pop-ms="{motion.ms(G2048.POP_MS) || 160}ms"
 	style:--simplify-ms="{motion.ms(G2048.SIMPLIFY_MS) || 160}ms"
@@ -44,11 +47,11 @@
 		onrelease: () => game.hideHelp()
 	})}
 >
-	{#each Array(G2048.SIZE * G2048.SIZE) as _, i (i)}
+	{#each Array(size * size) as _, i (i)}
 		<div
 			class="cell"
-			style:--row={Math.floor(i / G2048.SIZE)}
-			style:--col={i % G2048.SIZE}
+			style:--row={Math.floor(i / size)}
+			style:--col={i % size}
 			aria-hidden="true"
 		></div>
 	{/each}
@@ -59,7 +62,8 @@
 			{fontPx}
 			selected={tile.id === game.selectedId}
 			shaking={tile.id === game.shakeId}
-			colorByValue={prefs.helpColorByValue}
+			color={tileColor(tile.value, prefs.helpColorByValue, game.rules)}
+			need={game.countFor(tile.value)}
 			onkeyboardtap={(id) => game.tap(id)}
 		/>
 	{/each}
@@ -94,7 +98,7 @@
 			calc(var(--col) * (100% + var(--gap))),
 			calc(var(--row) * (100% + var(--gap)))
 		);
-		border-radius: 14px;
+		border-radius: var(--radius);
 		background: rgba(255, 250, 242, 0.55);
 		border: 2px dashed rgba(107, 58, 22, 0.35);
 	}

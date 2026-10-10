@@ -46,8 +46,35 @@ export const HAPTICS = {
 // Fraction 2048
 // ---------------------------------------------------------------------------
 
+export interface Variant2048 {
+	id: string;
+	/** Nom affiché dans le menu. */
+	name: string;
+	/** Petite phrase d'explication pour l'enfant. */
+	description: string;
+	/** Dénominateur de la brique de base : 16 pour la brique 1/16. */
+	brick: number;
+	/**
+	 * Échelle de la brique jusqu'à 1 : combien de tuiles égales il faut réunir à chaque palier.
+	 * [2, 2, 3] avec la brique 1/12 : 1/12 -> 1/6 -> 1/3 -> 1. Le produit doit valoir `brick`.
+	 */
+	ladder: number[];
+	/** Poids d'apparition des premiers paliers (le premier = la brique). */
+	spawnWeights: number[];
+	/** Taille de grille proposée par défaut. */
+	defaultSize: number;
+	/** Plafond du dénominateur pour cette variante (sinon MAX_DENOMINATOR, et au moins `brick`). */
+	maxDenominator?: number;
+	/**
+	 * Après 1, nombre de tuiles égales à réunir pour continuer (1 -> 2 -> 4 avec 2, 1 -> 3 -> 9 avec 3).
+	 * Par défaut : le dernier palier de l'échelle.
+	 */
+	afterOne?: number;
+}
+
 export const G2048 = {
-	SIZE: 4,
+	/** Tailles de grille proposées (N x N). */
+	SIZES: [3, 4, 5, 6],
 	START_TILES: 2,
 
 	/** Durée du glissement des tuiles, en ms. */
@@ -56,39 +83,66 @@ export const G2048 = {
 	POP_MS: 180,
 	/** Durée de l'animation de simplification (÷k), en ms. */
 	SIMPLIFY_MS: 320,
-	/** Écart entre les tuiles, en px. */
+	/** Écart entre les tuiles, en px (réduit automatiquement sur les grandes grilles). */
 	TILE_GAP_PX: 8,
-	/** Largeur maximale du plateau, en px. */
-	BOARD_MAX_PX: 460,
 
 	/**
-	 * Valeurs qui apparaissent (en seizièmes : 1 = 1/16, 2 = 1/8, 4 = 1/4) et leur poids.
-	 * Toutes les valeurs du jeu sont de la forme 2^k/16, donc tout peut mener à 1.
+	 * Les variantes : une brique de base et son échelle jusqu'à 1. Tout le reste en est déduit
+	 * (valeurs possibles, écritures qui apparaissent, nombre de tuiles à réunir).
 	 */
-	SPAWN_VALUE_WEIGHTS: [
-		{ sixteenths: 1, weight: 30 },
-		{ sixteenths: 2, weight: 45 },
-		{ sixteenths: 4, weight: 25 }
-	],
-	/** Écritures possibles pour chaque valeur (en seizièmes). La première est l'irréductible. */
-	SPAWN_FORMS: {
-		1: ['1/16'],
-		2: ['1/8', '2/16'],
-		4: ['1/4', '2/8', '3/12', '4/16'],
-		8: ['1/2', '2/4', '4/8', '6/12', '8/16']
-	} as Record<number, string[]>,
+	VARIANTS: [
+		{
+			id: 'moities',
+			name: 'Moitiés',
+			description: 'Brique 1/16. Deux tuiles égales fusionnent.',
+			brick: 16,
+			ladder: [2, 2, 2, 2],
+			spawnWeights: [30, 45, 25],
+			defaultSize: 4
+		},
+		{
+			id: 'tiers',
+			name: 'Tiers',
+			description: 'Brique 1/9. Il faut trois tuiles égales alignées.',
+			brick: 9,
+			ladder: [3, 3],
+			spawnWeights: [90, 10],
+			defaultSize: 5
+		},
+		{
+			id: 'douziemes',
+			name: 'Douzièmes',
+			description: 'Brique 1/12. Par deux, puis par trois pour les tiers.',
+			brick: 12,
+			ladder: [2, 2, 3],
+			spawnWeights: [45, 40, 15],
+			defaultSize: 5
+		},
+		{
+			id: 'expert',
+			name: 'Expert',
+			description: 'Brique 1/27. Toujours par trois !',
+			brick: 27,
+			ladder: [3, 3, 3],
+			spawnWeights: [70, 30],
+			defaultSize: 5,
+			maxDenominator: 27
+		}
+	] satisfies Variant2048[] as Variant2048[],
+	DEFAULT_VARIANT: 'moities',
+
 	/** Probabilité qu'une nouvelle tuile apparaisse sous une forme non simplifiée (si possible). */
 	SPAWN_UNSIMPLIFIED_P: 0.6,
 
 	/**
 	 * Une fusion écrit le résultat sur le plus petit dénominateur commun.
-	 * S'il dépasse ce plafond (ex. 12 et 8 donnent 24), on garde le plus grand des deux
-	 * (3/12 + 2/8 = 6/12).
+	 * S'il dépasse ce plafond (ex. 12 et 8 donnent 24), on garde le plus grand des dénominateurs
+	 * (3/12 + 2/8 = 6/12). Sert aussi de limite aux écritures qui apparaissent.
 	 */
 	MAX_DENOMINATOR: 16,
 
-	/** Points d'une fusion = valeur du résultat en seizièmes x ce facteur (1 entier = 160). */
-	MERGE_POINTS_PER_SIXTEENTH: 10,
+	/** Points d'une fusion = valeur du résultat x ce nombre (une fusion qui donne 1 rapporte 160). */
+	MERGE_POINTS_PER_WHOLE: 160,
 	/** Points d'une simplification directe par le PGCD (avant multiplicateur de combo). */
 	SIMPLIFY_PGCD_POINTS: 30,
 	/** Points d'une simplification partielle (diviseur plus petit que le PGCD). */
@@ -108,9 +162,6 @@ export const G2048 = {
 	DIVISOR_DISTRACTORS: 1,
 	/** Réservoir de faux diviseurs possibles (on prend ceux qui ne marchent pas). */
 	DIVISOR_DISTRACTOR_POOL: [2, 3, 4, 5, 6],
-
-	/** Valeurs entières qui déclenchent une petite fête (en plus du premier 1). */
-	MILESTONES: [2, 4, 8, 16],
 
 	/** Options d'aide par défaut. */
 	HELP_LONG_PRESS_DEFAULT: true,

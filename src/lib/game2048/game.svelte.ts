@@ -9,7 +9,7 @@
  * Un swipe pendant `moving` est mémorisé et joué juste après.
  */
 
-import { isEquivalent, toString, type Fraction } from '../fraction';
+import { toString, type Fraction } from '../fraction';
 import { haptic } from '../haptics';
 import { motion } from '../motion.svelte';
 import { defaultRng, type Rng } from '../rng';
@@ -18,7 +18,10 @@ import { load, remove, save } from '../storage';
 import {
 	canMove,
 	divisorChoices,
+	findVariant,
 	isOne,
+	makeRules,
+	mergeCount,
 	mergePoints,
 	move,
 	simplifyBy,
@@ -26,6 +29,7 @@ import {
 	spawn,
 	wholeValue,
 	type Direction,
+	type Rules,
 	type Tile
 } from './engine';
 
@@ -53,6 +57,8 @@ export interface Gain {
 }
 
 interface SavedGame {
+	variantId: string;
+	size: number;
 	tiles: Tile[];
 	score: number;
 	combo: number;
@@ -65,9 +71,14 @@ interface SavedGame {
 
 const SAVE_KEY = '2048:game';
 const BEST_KEY = '2048:best';
-const VERSION = 1;
+const VERSION = 2;
+
+/** Un record par variante et par taille de grille. */
+type Bests = Record<string, number>;
+const bestKey = (rules: Rules) => `${rules.variantId}:${rules.size}`;
 
 export class Game2048 {
+	rules = $state<Rules>(makeRules(findVariant(G2048.DEFAULT_VARIANT)));
 	tiles = $state<TileView[]>([]);
 	phase = $state<Phase>('idle');
 	score = $state(0);
@@ -99,8 +110,16 @@ export class Game2048 {
 
 	constructor(rng: Rng = defaultRng) {
 		this.rng = rng;
-		this.best = load(BEST_KEY, VERSION, 0);
 		if (!this.restore()) this.newGame();
+	}
+
+	/** Nombre de tuiles égales à réunir pour fusionner cette valeur (2 ou 3). */
+	countFor(value: Fraction): number {
+		return mergeCount(value, this.rules);
+	}
+
+	private loadBest(): number {
+		return load<Bests>(BEST_KEY, VERSION, {})[bestKey(this.rules)] ?? 0;
 	}
 
 	private nextId = () => this.nextIdValue++;
@@ -122,8 +141,11 @@ export class Game2048 {
 		this.timers.clear();
 	}
 
-	newGame(): void {
+	/** Nouvelle partie, en gardant la variante et la taille actuelles si on n'en donne pas. */
+	newGame(variantId: string = this.rules.variantId, size: number = this.rules.size): void {
 		this.destroy();
+		this.rules = makeRules(findVariant(variantId), size);
+		this.best = this.loadBest();
 		this.tiles = [];
 		this.score = 0;
 		this.combo = 0;
@@ -137,7 +159,7 @@ export class Game2048 {
 		this.gain = null;
 		const start: Tile[] = [];
 		for (let i = 0; i < G2048.START_TILES; i++) {
-			const t = spawn(start, this.rng, this.nextId);
+			const t = spawn(start, this.rng, this.nextId, this.rules);
 			if (t) start.push(t);
 		}
 		this.tiles = start.map((t) => ({ ...t, state: 'new' }));
@@ -158,7 +180,7 @@ export class Game2048 {
 		if (this.phase !== 'idle') return;
 
 		const current = this.tiles.filter((t) => t.state !== 'ghost');
-		const result = move(current, dir, this.nextId);
+		const result = move(current, dir, this.nextId, this.rules);
 		this.helpId = null;
 		if (!result.moved) {
 			haptic('tap');
@@ -187,8 +209,8 @@ export class Game2048 {
 			if (
 				whole !== null &&
 				whole > 1 &&
-				(G2048.MILESTONES as readonly number[]).includes(whole) &&
-				!this.milestones.includes(whole)
+				!this.milestones.includes(whole) &&
+				!newMilestones.includes(whole)
 			) {
 				newMilestones.push(whole);
 			}
@@ -209,7 +231,7 @@ export class Game2048 {
 
 	private settle(firstOne: boolean, newMilestones: number[]): void {
 		const kept = this.tiles.filter((t) => t.state !== 'ghost');
-		const fresh = spawn(kept, this.rng, this.nextId);
+		const fresh = spawn(kept, this.rng, this.nextId, this.rules);
 		this.tiles = fresh ? [...kept, { ...fresh, state: 'new' }] : kept;
 
 		if (firstOne) {
@@ -226,7 +248,7 @@ export class Game2048 {
 			haptic('win');
 		}
 
-		if (!canMove(this.tiles)) {
+		if (!canMove(this.tiles, this.rules)) {
 			this.phase = 'over';
 			this.queued = null;
 			haptic('gameOver');
@@ -244,7 +266,7 @@ export class Game2048 {
 
 	continueAfterWin(): void {
 		if (this.phase !== 'won') return;
-		this.phase = canMove(this.tiles) ? 'idle' : 'over';
+		this.phase = canMove(this.tiles, this.rules) ? 'idle' : 'over';
 		this.persist();
 	}
 
@@ -361,23 +383,15 @@ export class Game2048 {
 	// Utilitaires
 	// -------------------------------------------------------------------------
 
-	/** Deux tuiles équivalentes sont-elles voisines ? (sert à l'aide visuelle éventuelle) */
-	hasEquivalentNeighbour(tile: Tile): boolean {
-		return this.tiles.some(
-			(o) =>
-				o.id !== tile.id &&
-				o.state !== 'ghost' &&
-				Math.abs(o.row - tile.row) + Math.abs(o.col - tile.col) === 1 &&
-				isEquivalent(o.value, tile.value)
-		);
-	}
-
 	private addPoints(points: number, label?: string): void {
 		this.score += points;
 		this.gain = { id: ++this.eventId, points, label };
 		if (this.score > this.best) {
 			this.best = this.score;
-			save(BEST_KEY, VERSION, this.best);
+			save(BEST_KEY, VERSION, {
+				...load<Bests>(BEST_KEY, VERSION, {}),
+				[bestKey(this.rules)]: this.best
+			});
 		}
 	}
 
@@ -399,6 +413,8 @@ export class Game2048 {
 
 	private persist(): void {
 		const data: SavedGame = {
+			variantId: this.rules.variantId,
+			size: this.rules.size,
 			tiles: this.tiles
 				.filter((t) => t.state !== 'ghost')
 				.map(({ id, value, row, col }) => ({ id, value, row, col })),
@@ -417,6 +433,14 @@ export class Game2048 {
 	private restore(): boolean {
 		const data = load<SavedGame | null>(SAVE_KEY, VERSION, null);
 		if (!data || data.over || !Array.isArray(data.tiles) || data.tiles.length === 0) return false;
+		try {
+			this.rules = makeRules(findVariant(data.variantId), data.size);
+		} catch {
+			return false;
+		}
+		if (!(G2048.SIZES as readonly number[]).includes(data.size)) return false;
+		if (data.tiles.some((t) => t.row >= data.size || t.col >= data.size)) return false;
+		this.best = this.loadBest();
 		this.tiles = data.tiles.map((t) => ({ ...t, state: 'still' }));
 		this.score = data.score;
 		this.combo = data.combo;
@@ -424,7 +448,7 @@ export class Game2048 {
 		this.reachedOne = data.reachedOne;
 		this.milestones = data.milestones ?? [];
 		this.nextIdValue = data.nextId;
-		this.phase = canMove(this.tiles) ? 'idle' : 'over';
+		this.phase = canMove(this.tiles, this.rules) ? 'idle' : 'over';
 		return true;
 	}
 }
